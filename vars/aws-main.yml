@@ -1,0 +1,38 @@
+---
+aws:
+  access_key: CHANGEME
+  secret_key: CHANGEME
+  title: CHANGEME
+  region: eu-central-1
+
+vpc:
+  vpc_cidr: 10.10.0.0/16
+
+sub:
+  dmz_ip: 10.10.1.0/24
+  dmz_az: eu-central-1b
+  app_ip: 10.10.2.0/24
+  app_az: eu-central-1b
+  backend_ip: 10.10.3.0/24
+  backend_az: eu-central-1b
+  backend_ip1: 10.10.4.0/24
+  backend_az1: eu-central-1c
+
+sec:
+  myip: MYPRIVATEIP
+
+inst:
+  ami: ami-065deacbcaac64cf2
+  key_pair: CHANGEME
+
+base:
+  engine: aurora-mysql
+  eng_ver: 5.7.mysql_aurora.2.10.2
+  name: "{{ aws.title }}-backend"
+  storage: 20
+  type: db.t2.small
+  db: CHANGEME
+  user: CHANGEME
+  pass: 'CHANGEME'
+
+

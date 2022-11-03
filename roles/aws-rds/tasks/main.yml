@@ -1,0 +1,55 @@
+---
+- name: Build RDS Subnet Group
+  rds_subnet_group:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    region: "{{ aws.region }}"
+    state: present
+    name: "{{ aws.title }}-rdsgroup"
+    description: Subnet Group for RDS {{ aws.title }}
+    subnets:
+      - "{{ private_subnet2.subnet.id }}"
+      - "{{ private_subnet3.subnet.id }}"
+  register: subnet_group_results
+
+- name: Subnet group results
+  debug:
+    var: subnet_group_results
+
+- name: Launch cluster 
+  community.aws.rds_cluster:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    cluster_id: "{{ aws.title }}-backend"
+    region: "{{ aws.region }}"
+    engine: "{{ base.engine }}"
+    master_username: "{{ base.user }}"
+    master_user_password: "{{ base.pass }}"
+    state: present
+    db_subnet_group_name: "{{ aws.title }}-rdsgroup"
+    vpc_security_group_ids: "{{ backend_sg.group_id }}"
+    wait: yes
+  register: cluster
+  tags: cluster
+
+- name: Build RDS Instance
+  community.aws.rds_instance:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    region: "{{ aws.region }}"
+    availability_zone: "{{ sub.backend_az }}"
+    engine: "{{ base.engine }}"
+    engine_version: "{{ base.eng_ver }}"
+    db_cluster_identifier: "{{ base.name }}"
+    db_instance_identifier: "{{ base.db }}"
+    instance_type: "{{ base.type }}"
+    db_subnet_group_name: "{{ aws.title }}-rdsgroup"
+    publicly_accessible: false
+    wait: yes
+    tags:
+      Environment: "{{ aws.title }}"
+  register: rds_results
+
+- name: RDS rds results
+  debug:
+    var: rds_results

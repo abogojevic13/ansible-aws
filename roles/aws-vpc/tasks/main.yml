@@ -1,0 +1,206 @@
+---
+- name: Create VPC
+  ec2_vpc_net:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    name: "{{ aws.title }}-vpc"
+    state: present
+    cidr_block: "{{ vpc.vpc_cidr }}"
+    region: "{{ aws.region }}"
+  register: ec2_vpc_net_result
+
+- name: VPC ID
+  debug:
+    var: ec2_vpc_net_result.vpc.id
+
+- name: Create public subnet for NAT instance
+  ec2_vpc_subnet:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    state: present
+    vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+    cidr: "{{ sub.dmz_ip }}"
+    region: "{{ aws.region }}"
+    az: "{{ sub.dmz_az }}"
+    resource_tags:
+      Name: "{{ aws.title }}-dmz-sub"
+  register: public_subnet
+
+- name: Public Subnet
+  debug:
+    var: public_subnet.subnet.id
+
+- name: Create private subnet for APP instance
+  ec2_vpc_subnet:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    state: present
+    vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+    cidr: "{{ sub.app_ip }}"
+    region: "{{ aws.region }}"
+    az: "{{ sub.app_az }}"
+    resource_tags:
+      Name: "{{ aws.title }}-app-sub"
+  register: private_subnet1
+
+- name: Private Subnet for APP
+  debug:
+    var: private_subnet1.subnet.id
+
+- name: Create private subnet for BACKEND instance
+  ec2_vpc_subnet:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    state: present
+    vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+    region: "{{ aws.region }}"
+    cidr: "{{ sub.backend_ip }}"
+    az: "{{ sub.backend_az }}"
+    resource_tags:
+      Name: "{{ aws.title }}-backend-sub"
+  register: private_subnet2
+
+- name: Private Subnet for APP
+  debug:
+    var: private_subnet2.subnet.id
+
+- name: Create private subnet for BACKEND instance AZ 2
+  ec2_vpc_subnet:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    state: present
+    vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+    region: "{{ aws.region }}"
+    cidr: "{{ sub.backend_ip1 }}"
+    az: "{{ sub.backend_az1 }}"
+    resource_tags:
+      Name: "{{ aws.title }}-backend-sub-az"
+  register: private_subnet3
+
+- name: Private Subnet for APP
+  debug:
+    var: private_subnet3.subnet.id
+
+- name: Create NAT security group
+  ec2_group:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    name: "{{ aws.title }}-nat-sg"
+    state: present
+    description: Security group for NAT server
+    vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+    region: "{{ aws.region }}"
+    rules:
+      - proto: tcp
+        from_port: 80
+        to_port: 80
+        cidr_ip: 0.0.0.0/0
+      - proto: tcp
+        from_port: 22
+        to_port: 22
+        cidr_ip: "{{ sec.myip }}"
+  register: nat_sg
+
+- name: NAT security group
+  debug:
+    var: nat_sg.group_id
+
+- name: Create APP security group
+  ec2_group:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    name: "{{ aws.title }}-app-sg"
+    state: present
+    description: Security group for app server
+    vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+    region: "{{ aws.region }}"
+    rules:
+      - proto: tcp
+        from_port: 80
+        to_port: 80
+        group_id: "{{ nat_sg.group_id }}"
+      - proto: tcp
+        from_port: 22
+        to_port: 22
+        group_id: "{{ nat_sg.group_id }}"
+  register: app_sg
+
+- name: APP security group
+  debug:
+    var: app_sg.group_id
+
+- name: Create BACKEND security group
+  ec2_group:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    name: "{{ aws.title }}-backend-sg"
+    state: present
+    description: Security group for backend server
+    vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+    region: "{{ aws.region }}"
+    rules:
+      - proto: tcp
+        from_port: 3306
+        to_port: 3306
+        group_id: "{{ app_sg.group_id }}"
+  register: backend_sg
+
+- name: BACKEND security group
+  debug:
+    var: backend_sg.group_id
+
+- name: Create Internet Gateway for VPC
+  ec2_vpc_igw:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    resource_tags:
+      Name: "{{ aws.title }}-internet-gateway"
+    state: 'present'
+    vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+    region: "{{ aws.region }}"
+  register: igw
+
+- name: Create NAT Gateway
+  ec2_vpc_nat_gateway:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    resource_tags:
+      Name: "{{ aws.title }}-nat-gateway"
+    state: 'present'
+    subnet_id: "{{ public_subnet.subnet.id }}"
+    region: "{{ aws.region }}"
+    wait: yes
+    if_exist_do_not_create: true
+    release_eip: true
+  register: nat_gateway
+
+- name: Set up the public subnet route table
+  ec2_vpc_route_table:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    resource_tags:
+      Name: "{{ aws.title }}-public-route"
+    vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+    region: "{{ aws.region }}"
+    subnets: "{{ public_subnet.subnet.id }}"
+    routes:
+      - dest: '0.0.0.0/0'
+        gateway_id: "{{ igw.gateway_id }}"
+  register: public_route
+
+- name: Set up private subnet route table
+  ec2_vpc_route_table:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    resource_tags:
+      Name: "{{ aws.title }}-private-route"
+    vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+    region: "{{ aws.region }}"
+    subnets: 
+      - "{{ private_subnet1.subnet.id }}"
+      - "{{ private_subnet2.subnet.id }}"
+      - "{{ private_subnet3.subnet.id }}"
+    routes:
+      - dest: 0.0.0.0/0
+        gateway_id: "{{ nat_gateway.nat_gateway_id }}"
+  register: private_route

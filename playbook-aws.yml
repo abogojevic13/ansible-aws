@@ -1,0 +1,9 @@
+- hosts: localhost
+  become: true
+  roles:
+    - aws-vpc
+    - aws-nat
+    - aws-app
+    - aws-rds
+  vars_files:
+        - vars/aws-main.yml

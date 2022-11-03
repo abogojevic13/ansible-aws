@@ -1,0 +1,22 @@
+---
+- name: Create APP Instance
+  ec2:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    region: "{{ aws.region }}"
+    key_name: "{{ inst.key_pair }}"
+    vpc_subnet_id: "{{ private_subnet1.subnet.id }}"
+    group_id: "{{ app_sg.group_id }}"
+    instance_type: t2.micro
+    image: "{{ inst.ami }}"
+    wait: yes
+    wait_timeout: 500
+    exact_count: 1
+    instance_tags:
+      Name: "{{ aws.title }}-app"
+      Environment: Dev
+    count_tag: 
+      Name: "{{ aws.title }}-app"
+      Environment: Dev
+  register: app_instance
+

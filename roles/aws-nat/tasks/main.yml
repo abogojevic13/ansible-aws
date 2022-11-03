@@ -1,0 +1,35 @@
+---
+- name: Create NAT Instance
+  ec2:
+    aws_access_key: "{{ aws.access_key }}"
+    aws_secret_key: "{{ aws.secret_key }}"
+    region: "{{ aws.region }}"
+    key_name: "{{ inst.key_pair }}"
+    vpc_subnet_id: "{{ public_subnet.subnet.id }}"
+    group_id: "{{ nat_sg.group_id }}"
+    instance_type: t2.micro
+    image: "{{ inst.ami }}"
+    wait: yes
+    wait_timeout: 500
+    exact_count: 1
+    instance_tags:
+      Name: "{{ aws.title }}-nat"
+      Environment: Dev
+    count_tag: 
+      Name: "{{ aws.title }}-nat"
+      Environment: Dev
+    assign_public_ip: yes
+  register: nat_instance
+
+- name: Add new instance to host group
+  add_host:
+    hostname: "{{ item.public_ip }}"
+    groupname: launched
+  loop: "{{ nat_instance.instances }}"
+
+- name: Wait for SSH to come up
+  wait_for:
+    host: "{{ item.public_ip }}"
+    port: 22
+    state: started
+  loop: "{{ nat_instance.instances }}"
